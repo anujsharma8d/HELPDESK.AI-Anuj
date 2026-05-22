@@ -55,6 +55,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from backend.services.classifier_service import ClassifierService
 from backend.services.classifier_v2 import classifier_v2
 from backend.services.classifier_v3 import classifier_v3 # V3 Power Model
+from backend.services.audit_service import AuditLogService, AuditLogAccessError
 from backend.services.ner_service import NERService
 from backend.services.duplicate_service import DuplicateService
 from backend.services.rag_service import RagService
@@ -216,6 +217,24 @@ class TicketRecord(BaseModel):
     messages: list[Message] = []
     metadata: dict = {}
     timeline: dict = {} # Milestones: created, analyzed, triaged, routed, in_progress, resolved
+
+
+class AuditLogProfile(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    profile_picture: str | None = None
+
+
+class AuditLogRecord(BaseModel):
+    id: str
+    ticket_id: str
+    company_id: str
+    performed_by: str | None = None
+    action: str
+    old_value: dict | list | str | None = None
+    new_value: dict | list | str | None = None
+    created_at: str
+    performed_by_profile: AuditLogProfile | None = None
 
 
 # --- In-Memory Database (to be replaced with SQL later) ---
@@ -780,6 +799,19 @@ async def get_ticket_by_id(ticket_id: str):
     if not res.data:
         raise HTTPException(status_code=404, detail="Ticket not found")
     return res.data
+
+
+@app.get("/tickets/{ticket_id}/audit_logs", response_model=list[AuditLogRecord])
+async def get_ticket_audit_logs(ticket_id: str, company_id: str):
+    """Return a company-scoped chronological audit trail for a ticket."""
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not initialized")
+
+    try:
+        service = AuditLogService(supabase)
+        return service.get_ticket_audit_logs(ticket_id, company_id)
+    except AuditLogAccessError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.detail)
 
 
 @app.post("/tickets", response_model=TicketRecord)
