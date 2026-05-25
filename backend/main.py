@@ -779,60 +779,21 @@ async def save_ticket(request_body: TicketSaveRequest):
     }
     final_data["metadata"] = metadata
 
-        # Resolve tenant linkage from user profile with authorization validation.
-        profile = {}
-        if request_body.user_id:
-            try:
-                profile_res = (
-                    supabase.table("profiles")
-                    .select("company_id, company")
-                    .eq("id", request_body.user_id)
-                    .single()
-                    .execute()
-                )
-                profile = profile_res.data or {}
-                if not profile:
-                    raise HTTPException(status_code=404, detail="User profile not found")
-                
-                # SELF-HEALING: If company_id is null in database but company name exists, resolve it!
-                if not profile.get("company_id") and profile.get("company"):
-                    try:
-                        comp_name = profile.get("company").strip()
-                        comp_res = (
-                            supabase.table("companies")
-                            .select("id")
-                            .ilike("name", comp_name)
-                            .execute()
-                        )
-                        if comp_res.data:
-                            resolved_company_id = comp_res.data[0]["id"]
-                            # Backfill the profile table in real-time
-                            supabase.table("profiles").update({"company_id": resolved_company_id}).eq("id", request_body.user_id).execute()
-                            profile["company_id"] = resolved_company_id
-                            logger.info(f"[SELF-HEALING] Backfilled company_id={resolved_company_id} for user={request_body.user_id}")
-                    except Exception as healing_err:
-                        logger.warning(f"[SELF-HEALING WARNING] Failed to backfill company_id: {healing_err}")
-            except HTTPException:
-                raise
-            except Exception as profile_error:
-                user_hash = hashlib.sha256(str(request_body.user_id).encode()).hexdigest()[:8]
-                logger.error(f"Tenant resolution error for user {user_hash}: {profile_error}")
-                raise HTTPException(status_code=503, detail="Failed to resolve tenant linkage") from profile_error
+    # Backfill SLA deadlines/status when the client omits or sends empty values.
+    priority_key = str(final_data.get("priority") or "medium").lower().strip()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
 
-        # Validate tenant consistency and authorization.
-        profile_company_id = profile.get("company_id")
-        if final_data.get("company_id"):
-            # User provided company_id: verify it matches their profile.
-            if profile_company_id and final_data["company_id"] != profile_company_id:
-                user_hash = hashlib.sha256(str(request_body.user_id).encode()).hexdigest()[:8]
-                logger.warning(f"Tenant mismatch: user {user_hash} attempted {final_data['company_id']}, assigned to {profile_company_id}")
-                raise HTTPException(status_code=403, detail="User not authorized for this tenant")
-        elif profile_company_id:
-            # Backfill company_id from profile.
-            final_data["company_id"] = profile_company_id
-        elif request_body.user_id:
-            # User has no tenant assignment.
-            raise HTTPException(status_code=400, detail="User has no tenant assignment")
+    if not str(final_data.get("sla_breach_at") or "").strip():
+        final_data["sla_breach_at"] = compute_sla_breach_at(priority_key, now_utc)
+
+    if not str(final_data.get("sla_response_due_at") or "").strip():
+        policy = get_sla_policy(priority_key)
+        response_hours = max(1, int(round(float(policy["max_hours"]) * 0.25)))
+        response_due_at = now_utc + datetime.timedelta(hours=response_hours)
+        final_data["sla_response_due_at"] = response_due_at.isoformat()
+
+    if not str(final_data.get("sla_status") or "").strip():
+        final_data["sla_status"] = "ACTIVE"
     # Resolve tenant linkage from user profile with authorization validation.
     profile = {}
     if request_body.user_id:
@@ -922,13 +883,14 @@ async def save_ticket(request_body: TicketSaveRequest):
         VALID_TICKET_COLUMNS = {
             "user_id", "subject", "description", "category", "subcategory",
             "priority", "assigned_team", "status", "auto_resolve", "is_duplicate",
-            "confidence", "image_url", "company", "company_id", "sla_breach_at", "metadata",
+            "confidence", "image_url", "company", "company_id",
+            "sla_breach_at", "sla_response_due_at", "sla_status", "escalation_level", "metadata",
         }
         # Merge any extra telemetry and SLA/duplicate fields into metadata before filtering
         existing_metadata = final_data.get("metadata") or {}
         extra_keys = (
             "entities", "solution_steps", "ocr_text", "needs_review", "routing_confidence",
-            "is_potential_duplicate", "parent_ticket_id", "sla_response_due_at", "sla_status", "escalation_level"
+            "is_potential_duplicate", "parent_ticket_id"
         )
         for extra_key in extra_keys:
             if extra_key in final_data and final_data[extra_key] not in (None, "", [], {}):
