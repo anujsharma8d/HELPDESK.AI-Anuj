@@ -1380,12 +1380,6 @@ async def legacy_analyze_and_save(request_body: TicketRequest):
     """
     return await analyze_only(request_body)
 
-
-@app.post("/ai/analyze_ticket/legacy")
-async def legacy_analyze_ticket_route(request_body: TicketRequest):
-    """Explicit legacy route kept for backward compatibility."""
-    return await analyze_only(request_body)
-
 @app.post("/ai/analyze-v2")
 async def analyze_ticket_v2(request: TicketRequest):
     text = request.text
