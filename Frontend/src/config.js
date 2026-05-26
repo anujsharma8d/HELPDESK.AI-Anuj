@@ -13,6 +13,5 @@ const getBackendUrl = () => {
 export const API_CONFIG = {
     BACKEND_URL: getBackendUrl(),
     FRONTEND_URL: window.location.origin,
-    IS_PROD: import.meta.env.PROD,
-    USE_MOCK: import.meta.env.VITE_USE_MOCK !== 'false'  // default true
+    IS_PROD: import.meta.env.PROD
 };

@@ -5,7 +5,6 @@ import {
   ScrollView, StatusBar, Animated,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { backendLogin, backendLogout } from '../../lib/authBackend';
 import { COLORS, SHADOWS } from '../../styles/theme';
 import { Lock, Mail, Eye, EyeOff, Zap, ArrowRight, ShieldCheck } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -53,7 +52,6 @@ const LoginScreen = () => {
     }
     setLoading(true);
     try {
-      await backendLogin(email, password);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 

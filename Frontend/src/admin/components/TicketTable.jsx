@@ -73,9 +73,6 @@ const TicketTable = ({ tickets = [], isLoading = false, limit = null }) => {
                             ? ticket.assigned_team
                             : (teamMap[effectiveCategory] || ticket.assigned_team || 'L1 Helpdesk');
                         const statusSt = getStatusStyle(ticket.status);
-                        const translationMeta = ticket?.metadata?.translation;
-                        const isTranslated = Boolean(translationMeta?.translated);
-                        const sourceLanguageName = translationMeta?.source_language_name || translationMeta?.source_language || 'Unknown';
 
                         // Truncated subject
                         const subject = ticket.subject || ticket.summary || 'Untitled ticket';
@@ -132,16 +129,9 @@ const TicketTable = ({ tickets = [], isLoading = false, limit = null }) => {
                                             <span style={{ fontSize: '13px', fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {truncSubject}
                                             </span>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{ fontSize: '11px', color: '#6b7280' }}>
-                                                    {effectiveCategory || 'General'}
-                                                </span>
-                                                {isTranslated && (
-                                                    <span style={{ fontSize: '10px', color: '#0369a1' }}>
-                                                        Translated from {sourceLanguageName}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                                                {effectiveCategory || 'General'}
+                                            </span>
                                         </div>
                                     </div>
                                 </td>

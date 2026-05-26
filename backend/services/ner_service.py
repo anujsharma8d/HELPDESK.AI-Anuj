@@ -5,20 +5,12 @@ Labels follow pattern: B-B-ENTITY_TYPE, I-B-ENTITY_TYPE, O
 
 import os
 import json
-try:
-    import torch
-    import torch.nn.functional as F
-    from transformers import DistilBertTokenizerFast, DistilBertForTokenClassification
-    _HAS_TORCH = True
-except Exception:  # pragma: no cover - optional runtime dependency
-    torch = None
-    F = None
-    DistilBertTokenizerFast = None
-    DistilBertForTokenClassification = None
-    _HAS_TORCH = False
+import torch
+import torch.nn.functional as F
+from transformers import DistilBertTokenizerFast, DistilBertForTokenClassification
 
 SAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "models", "ner")
-DEVICE = torch.device("cuda" if torch and torch.cuda.is_available() else "cpu") if _HAS_TORCH else None
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_LEN = 128
 
 import re
@@ -47,10 +39,6 @@ class NERService:
     def load(self):
         """Load model, tokenizer, and label map from disk."""
         if self._loaded:
-            return
-
-        if not _HAS_TORCH:
-            print("[INFO] NER runtime not available; NER model will remain unloaded until dependencies are installed.")
             return
 
         abs_dir = os.path.abspath(SAVE_DIR)

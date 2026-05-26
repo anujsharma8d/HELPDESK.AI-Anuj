@@ -127,55 +127,17 @@ const AppContent = () => {
   const [userRole, setUserRole] = useState('user'); // 'user', 'admin', 'master_admin'
 
   useEffect(() => {
-    let finished = false;
-
     const initialize = async () => {
-      // Safety timeout wrapper: if anything hangs, force mount after 3 seconds
-      const timeoutId = setTimeout(async () => {
-        if (!finished) {
-          console.log('[AuthInit] Timeout reached (3s). Forcing mount fallback.');
-          try {
-            const onboardingDone = await AsyncStorage.getItem('@onboarding_complete');
-            setShowOnboarding(onboardingDone === null);
-          } catch (err) {
-            setShowOnboarding(false);
-          }
-          setLoading(false);
-        }
-      }, 3000);
-
       try {
-        // 1. Instantly load cached status and role from AsyncStorage (stale-while-revalidate pattern)
-        const [cachedStatus, cachedRole] = await Promise.all([
-          AsyncStorage.getItem('@user_status'),
-          AsyncStorage.getItem('@user_role'),
-        ]);
-
-        if (cachedStatus) setUserStatus(cachedStatus);
-        if (cachedRole) setUserRole(cachedRole);
-
-        // 2. Fetch session with a 2.5 second timeout wrapper to prevent slow refreshing from locking the app
-        const sessionPromise = supabase.auth.getSession();
-        const sessionTimeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Session fetch timed out')), 2500)
-        );
-
-        const { data: { session } } = await Promise.race([sessionPromise, sessionTimeoutPromise]);
+        const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
 
-        // 3. If session is valid, validate/fetch the user profile
         if (session?.user) {
-          const profilePromise = supabase
+          const { data, error } = await supabase
             .from('profiles')
             .select('status, role')
             .eq('id', session.user.id)
             .single();
-
-          const profileTimeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Profile fetch timed out')), 2000)
-          );
-
-          const { data, error } = await Promise.race([profilePromise, profileTimeoutPromise]);
           
           if (error) {
             console.log('[AuthInit] Profile fetch error, validating session:', error.message);
@@ -184,29 +146,20 @@ const AppContent = () => {
             if (userError) {
               console.log('[AuthInit] Token validation failed. Clearing session.');
               setSession(null);
-              await AsyncStorage.removeItem('@user_status');
-              await AsyncStorage.removeItem('@user_role');
             } else {
-              // Valid token but profiles table is offline; retain cached or default to safe user status
-              if (!cachedStatus) setUserStatus('active');
-              if (!cachedRole) setUserRole('user');
+              // Valid token but profiles table is temporarily offline; default to user
+              setUserStatus('active');
+              setUserRole('user');
             }
           } else {
-            const status = data?.status || 'active';
-            const role = data?.role || 'user';
-            setUserStatus(status);
-            setUserRole(role);
-            await Promise.all([
-              AsyncStorage.setItem('@user_status', status),
-              AsyncStorage.setItem('@user_role', role),
-            ]);
+            setUserStatus(data?.status || 'active');
+            setUserRole(data?.role || 'user');
           }
         }
       } catch (e) {
-        console.log('[AuthInit] Exception caught during initialization:', e.message || e);
+        console.log('[AuthInit] Crash caught during initialization:', e);
       } finally {
-        finished = true;
-        clearTimeout(timeoutId);
+        // Guarantee showOnboarding is resolved to a boolean to prevent React Navigation stack layout mismatch
         try {
           const onboardingDone = await AsyncStorage.getItem('@onboarding_complete');
           setShowOnboarding(onboardingDone === null);
@@ -231,17 +184,12 @@ const AppContent = () => {
           
           if (error) {
             console.log('[AuthChange] Profile query failed:', error.message);
+            // Default to safe values to avoid blank screens
             setUserStatus('active');
             setUserRole('user');
           } else {
-            const status = data?.status || 'active';
-            const role = data?.role || 'user';
-            setUserStatus(status);
-            setUserRole(role);
-            await Promise.all([
-              AsyncStorage.setItem('@user_status', status),
-              AsyncStorage.setItem('@user_role', role),
-            ]);
+            setUserStatus(data?.status || 'active');
+            setUserRole(data?.role || 'user');
           }
         } catch (err) {
           console.warn('[AuthChange] Uncaught exception inside handler:', err);
@@ -251,10 +199,6 @@ const AppContent = () => {
       } else {
         setUserStatus(null);
         setUserRole('user');
-        await Promise.all([
-          AsyncStorage.removeItem('@user_status'),
-          AsyncStorage.removeItem('@user_role'),
-        ]);
       }
     });
 
@@ -272,15 +216,9 @@ const AppContent = () => {
         schema: 'public',
         table: 'profiles',
         filter: `id=eq.${session.user.id}`,
-      }, async (payload) => {
-        const status = payload.new.status;
-        const role = payload.new.role || 'user';
-        setUserStatus(status);
-        setUserRole(role);
-        await Promise.all([
-          AsyncStorage.setItem('@user_status', status),
-          AsyncStorage.setItem('@user_role', role),
-        ]);
+      }, (payload) => {
+        setUserStatus(payload.new.status);
+        setUserRole(payload.new.role || 'user');
       })
       .subscribe();
 
@@ -291,6 +229,7 @@ const AppContent = () => {
   useEffect(() => {
     const handleUrl = async ({ url }) => {
       if (!url) return;
+      // Parse hash fragment: helpdeskai://login#access_token=...&refresh_token=...
       const hashIndex = url.indexOf('#');
       if (hashIndex === -1) return;
       const hash = url.substring(hashIndex + 1);
@@ -316,7 +255,9 @@ const AppContent = () => {
       }
     };
 
+    // Handle app already open
     const subscription = Linking.addEventListener('url', handleUrl);
+    // Handle cold start — app launched from the link
     Linking.getInitialURL().then(url => url && handleUrl({ url }));
 
     return () => subscription.remove();

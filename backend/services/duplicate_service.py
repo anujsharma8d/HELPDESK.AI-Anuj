@@ -7,13 +7,7 @@ import uuid
 import os
 from typing import Any
 
-try:
-    from sentence_transformers import SentenceTransformer, util
-    _HAS_SENTENCE = True
-except Exception:  # pragma: no cover - optional runtime dependency
-    SentenceTransformer = None
-    util = None
-    _HAS_SENTENCE = False
+from sentence_transformers import SentenceTransformer, util
 
 SIMILARITY_THRESHOLD = 0.70
 
@@ -38,17 +32,6 @@ class DuplicateService:
             return
         
         print("[DuplicateService] Loading model...")
-        if not _HAS_SENTENCE:
-            allow_degraded = os.environ.get("ALLOW_DEGRADED_STARTUP", "0") == "1"
-            self._load_failed = True
-            print("[DuplicateService] sentence-transformers not installed")
-            if allow_degraded:
-                print("[DuplicateService] DEGRADED: Continuing without model (ALLOW_DEGRADED_STARTUP=1)")
-                self.model = None
-                self._loaded = False
-                return
-            else:
-                raise ImportError("sentence-transformers is required for DuplicateService")
         try:
             # Check if a local model path is provided
             model_path = os.environ.get("SENTENCE_TRANSFORMER_MODEL_PATH")
@@ -118,20 +101,12 @@ class DuplicateService:
 
     def generate_embedding(self, text: str) -> list[float] | None:
         """Generate a 384-d embedding for the provided ticket text."""
-        from backend.services.redis_cache import redis_cache
-
-        cached = redis_cache.get_embedding(text)
-        if cached is not None:
-            return cached
-
         self.load()
         if not self.is_available():
             return None
 
         embedding = self.model.encode(text, convert_to_tensor=False, normalize_embeddings=True)
-        values = [float(value) for value in embedding.tolist()]
-        redis_cache.set_embedding(text, values)
-        return values
+        return [float(value) for value in embedding.tolist()]
 
     def _build_result(
         self,

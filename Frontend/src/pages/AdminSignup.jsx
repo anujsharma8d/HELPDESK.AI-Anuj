@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import useAuthStore from "../store/authStore";
 import { Select } from "../components/ui/select";
-import { getPasswordValidation, getPasswordValidationMessage } from "../utils/passwordValidation";
 
 /**
  * AdminSignup — Premium Multi-step Company Registration
@@ -45,14 +44,6 @@ function AdminSignup() {
 
     const navigate = useNavigate();
     const { signup, loading, user, profile } = useAuthStore();
-    const passwordRules = {
-        minLength: 8,
-        requireUppercase: true,
-        requireNumber: true,
-        requireSpecial: true,
-    };
-    const passwordChecks = getPasswordValidation(formData.password, passwordRules);
-    const passwordWarning = getPasswordValidationMessage(passwordChecks, passwordRules);
 
     // Redirect if already logged in and verified
     useEffect(() => {
@@ -89,8 +80,8 @@ function AdminSignup() {
                 setError("Please fill in all required personal information.");
                 return;
             }
-            if (passwordWarning) {
-                setError(passwordWarning);
+            if (formData.password.length < 8) {
+                setError("Password must be at least 8 characters long.");
                 return;
             }
             if (formData.password !== formData.confirmPassword) {
@@ -431,7 +422,7 @@ function AdminSignup() {
                                             </div>
                                             {/* Strength Meter */}
                                             {formData.password && (
-                                                <div className="mt-2 space-y-2">
+                                                <div className="mt-2 space-y-1">
                                                     <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
                                                         <span>Strength: {getStrengthText()}</span>
                                                         <span>{passwordStrength}%</span>
@@ -442,12 +433,6 @@ function AdminSignup() {
                                                             initial={{ width: 0 }}
                                                             animate={{ width: `${passwordStrength}%` }}
                                                         />
-                                                    </div>
-                                                    <div
-                                                        aria-live="polite"
-                                                        className={`text-[11px] font-semibold ${passwordWarning ? "text-red-600" : "text-emerald-700"}`}
-                                                    >
-                                                        {passwordWarning || "Password requirements met."}
                                                     </div>
                                                 </div>
                                             )}
