@@ -13,6 +13,7 @@ import MasterAdminProtectedRoute from "./components/shared/MasterAdminProtectedR
 import ProtectedRoute from "./components/shared/ProtectedRoute";
 import useAuthStore from "./store/authStore";
 import NotApproved from "./pages/NotApproved";
+import BackToTop from "./components/shared/BackToTop";
 const Login = lazy(() => import("./pages/Login"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
@@ -217,7 +218,8 @@ function App() {
   return (
     <BrowserRouter>
       <TitleUpdater />
-      <ScrollToTop />
+      {/* <ScrollToTop /> */}
+      <BackToTop />
       <Suspense fallback={<RouteFallback />}>
         <Toaster />
         <BugReportWidget />
