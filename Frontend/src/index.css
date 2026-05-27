@@ -150,3 +150,7 @@ body{
 .dark nav span {
   color: #f9fafb !important;
 }
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
